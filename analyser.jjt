@@ -1,0 +1,202 @@
+/*******************************
+***** SECTION 1 - OPTIONS *****
+*******************************/
+options { JAVA_UNICODE_ESCAPE = true; 
+		   IGNORE_CASE = true;
+		}
+/*********************************
+***** SECTION 2 - USER CODE *****
+*********************************/
+PARSER_BEGIN(SLPTokeniser)
+public class SLPTokeniser{
+	public static void main(String args[]){
+	    String temp;
+	    STC temp2;
+
+	    if (args.length < 1)
+	    {
+	      System.out.println("Please pass in the filename.");
+	      System.exit(1);
+	    }
+
+	    SLPTokeniser parser = new SLPTokeniser(anew FileInputStream(args[0]));
+
+	    SimpleNode root = parser.program();
+
+	    System.out.println("Abstract Syntax Tree:");
+
+	    root.dump(" ");
+}
+PARSER_END(SLPTokeniser)
+/*****************************************
+***** SECTION 3 - TOKEN DEFINITIONS *****
+*****************************************/
+TOKEN_MGR_DECLS :
+{
+	static int commentNesting = 0;
+}
+SKIP : /*** Ignoring spaces/tabs/newlines ***/
+{
+	" "
+	| "\t"
+	| "\n"
+	| "\r"
+	| "\f"
+}
+SKIP : /* COMMENTS */
+{
+	<"/*"> { commentNesting++; } : IN_COMMENT 
+	| < "//" (~["\n"])*"\n">
+}
+<IN_COMMENT> SKIP :
+{
+	"/*" { commentNesting++; }
+	| "*/" { commentNesting--;
+	if (commentNesting == 0)
+		SwitchTo(DEFAULT);
+	}
+	| <~[]>
+}
+TOKEN : /* Keywords and punctuation */
+{
+	< SEMIC : ";" >
+	| < COLON : ":" >
+	| < ASSIGN : ":=" >
+	| < LBR : "(" >
+	| < RBR : ")" >
+	| < COMMA : "," >
+	| < PLUS_SIGN : "+" >
+	| < MINUS_SIGN : "-" >
+	| < MULT_SIGN : "*" >
+	| < DIV_SIGN : "/" >
+	| < RCBR : "}" > 
+	| < LCBR : "{" >
+	| < EXLM : "!" >
+	| < QUESTION : "?" >
+	| < PERCENT : "%" >
+	| < EQUALS : "=" > 
+	| < NOT_EQUAL : "!=" >
+	| < LEFT_BRACE : "<" >
+	| < RIGHT_BRACE : ">" >
+	| < LEFT_BRACE_EQUAL : "<=" >
+	| < RIGHT_BRACE_EQUAL : ">=" >
+	| < DOT : "." >
+	| < AND : "and" >
+	| < BOOL : "boolean" >
+	| < CONST : "constant" >
+	| < DO : "do" >
+	| < ELSE : "else" >
+	| < FALSE : "false" >
+	| < IF : "if" >
+	| < INT : "integer" >
+	| < MAIN : "main" >
+	| < NOT : "not" >
+	| < OR : "or" >
+	| < REAL : "real" >
+	| < RETURN : "return" >
+	| < STR : "string" >
+	| < THEN : "then" >
+	| < TRUE : "true" >
+	| < VAR : "var" >
+	| < VOID : "void" >
+	| < WHILE : "while" >
+	
+}
+//Starts with a single-double quote, then anything on the keyboard
+//Doesn't accept "" or \n, unless it finds a backslash, in which case they're allowed
+TOKEN : /* Strings */
+{
+	< STRING : "\"" ((~[ "\"" , "\n", "\\"] )* | (("\\" ("\"" | "\n" | "\\" | "'\n\'"))))* "\"">
+}
+TOKEN : /* Numbers and identifiers */
+{
+	< NUM : (<DIGIT>)+ | (<DIGIT>) + "." (<DIGIT>) + >
+	| < #DIGIT : ["0" - "9"] >
+	| < ID : (<LETTER>)+ (<LETTER> | "_" | <DIGIT>) * >
+	| < #LETTER : ["a" - "z", "A" - "Z"] >
+}
+TOKEN : /* Anything not recognised so far */
+{
+	< OTHER : ~[] >
+}
+
+//Grammar starts here
+
+void program() : {}{
+	(decl())*(function())*main_prog()
+}
+
+void decl() : {}{
+	(var_decl() | const_decl())
+}
+
+void var_decl () : {}{
+	<VAR>ident_list()<COLON>type()(<COMMA>ident_list()<COLON>type())*<SEMIC>
+}
+
+void const_decl() : {}{
+	<CONST><ID><COLON>type()<EQUALS>expression()(<COMMA><ID><COLON>type()<EQUALS>expression())*<SEMIC>
+}
+
+void function () :{} {
+	type()<ID><LBR>param_list()<RBR><LCBR>
+		(decl())*(statement()<SEMIC>)*<RETURN><LBR>expression() | {}<RBR><SEMIC>
+	<RCBR>
+}
+void param_list () :{} {
+	(<ID><COLON>type()(<COMMA><ID><COLON>type())* | {})
+}
+
+void type () :{}{
+	<INT> | <BOOL> | <REAL> | <STR> | <VOID>
+}
+
+void main_prog() :{} {
+	<MAIN>
+	<LCBR>
+	(decl())*(statement()<SEMIC>)*
+	<RCBR>
+}
+
+void statement () :{}{
+	<ID><ASSIGN>expression()
+	|<ID><ASSIGN><STR>
+	|<EXLM>expression()
+	|<QUESTION><ID>
+	|<ID><LBR>arg_list()<RBR>
+	|<LCBR>(statement()<SEMIC>)*<RCBR>
+	|<IF>condition()<THEN>statement()
+	|<IF>condition()<THEN>statement()<ELSE>statement()
+	|<WHILE>condition()<DO>statement()
+	|{}
+}
+
+void expression(): {}{
+	fragment()((<PLUS_SIGN>|<MINUS_SIGN>|<MULT_SIGN>|<DIV_SIGN>)fragment())*
+}
+
+void fragment() :{}{
+	<ID>
+	|<NUM>
+	|(<PLUS_SIGN>|<MINUS_SIGN>)fragment()
+	|expression()
+}
+
+void condition() :{}{
+	<NOT>expression()
+	|expression()(<EQUALS>|<NOT_EQUAL>|<LEFT_BRACE>|<RIGHT_BRACE>|<LEFT_BRACE_EQUAL>|<RIGHT_BRACE_EQUAL>|<AND>|<OR>)
+	|<ID>
+}
+
+void ident_list () :{}{
+	<ID>(<COMMA><ID>)*
+}
+
+void arg_list():{}{
+	(<ID>(<COMMA><ID>)* | {})
+}
+
+
+
+
+
